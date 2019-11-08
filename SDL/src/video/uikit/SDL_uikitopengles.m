@@ -84,7 +84,9 @@ void UIKit_GL_SwapWindow(_THIS, SDL_Window * window)
 	[data->view swapBuffers];
 	/* since now we've got something to draw
 	   make the window visible */
-	[data->uiwindow makeKeyAndVisible];
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        [data->uiwindow makeKeyAndVisible];
+    });
 
 	/* we need to let the event cycle run, or the OS won't update the OpenGL view! */
 	SDL_PumpEvents();
@@ -93,37 +95,39 @@ void UIKit_GL_SwapWindow(_THIS, SDL_Window * window)
 SDL_GLContext UIKit_GL_CreateContext(_THIS, SDL_Window * window)
 {
 	
-	SDL_uikitopenglview *view;
-
-	SDL_WindowData *data = (SDL_WindowData *)window->driverdata;
-#ifndef IPHONEOS
-	/* construct our view, passing in SDL's OpenGL configuration data */
-	view = [[SDL_uikitopenglview alloc] initWithFrame: [[UIScreen mainScreen] applicationFrame] \
-									retainBacking: _this->gl_config.retained_backing \
-									rBits: _this->gl_config.red_size \
-									gBits: _this->gl_config.green_size \
-									bBits: _this->gl_config.blue_size \
-									aBits: _this->gl_config.alpha_size \
-									depthBits: _this->gl_config.depth_size];
-#else
-    view = [[SDLUIKitDelegate sharedAppDelegate] screen];
-    [view resize:CGSizeMake(window->w, window->h)];
-#endif
+	__block SDL_uikitopenglview *view;
     
-    
-	data->view = view;
-#ifndef IPHONEOS
-	/* add the view to our window */
-	[data->uiwindow addSubview: view ];
-	
-	/* Don't worry, the window retained the view */
-	///FIXME [view release];
-#endif
-    
-	if ( UIKit_GL_MakeCurrent(_this, window, view) < 0 ) {
-        UIKit_GL_DeleteContext(_this, view);
-        return NULL;
-    }
+    dispatch_sync(dispatch_get_main_queue(), ^{
+        SDL_WindowData *data = (SDL_WindowData *)window->driverdata;
+    #ifndef IPHONEOS
+        /* construct our view, passing in SDL's OpenGL configuration data */
+        view = [[SDL_uikitopenglview alloc] initWithFrame: [[UIScreen mainScreen] applicationFrame] \
+                                        retainBacking: _this->gl_config.retained_backing \
+                                        rBits: _this->gl_config.red_size \
+                                        gBits: _this->gl_config.green_size \
+                                        bBits: _this->gl_config.blue_size \
+                                        aBits: _this->gl_config.alpha_size \
+                                        depthBits: _this->gl_config.depth_size];
+    #else
+        view = [[SDLUIKitDelegate sharedAppDelegate] screen];
+        [view resize:CGSizeMake(window->w, window->h)];
+    #endif
+        
+        
+        data->view = view;
+    #ifndef IPHONEOS
+        /* add the view to our window */
+        [data->uiwindow addSubview: view ];
+        
+        /* Don't worry, the window retained the view */
+        ///FIXME [view release];
+    #endif
+        
+        if ( UIKit_GL_MakeCurrent(_this, window, view) < 0 ) {
+            UIKit_GL_DeleteContext(_this, view);
+            view = NULL;
+        }
+    });
 		
 	return view;
 }

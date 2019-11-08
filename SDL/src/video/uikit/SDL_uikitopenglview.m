@@ -249,8 +249,16 @@
 
 - (void)resizeMain
 {
-    if (delegate) {
-        [delegate onResize:newSize];
+    if ([NSThread isMainThread]) {
+        if (delegate) {
+            [delegate onResize:newSize];
+        }
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            if (delegate) {
+                [delegate onResize:newSize];
+            }
+        });
     }
 }
 
@@ -258,8 +266,16 @@
 // Be careful, this can be called outside mainthread
 - (BOOL)resize:(CGSize)sizeNew
 {
-    if (self.bounds.size.width == sizeNew.width && 
-        self.bounds.size.height == sizeNew.height )
+    __block CGRect bounds;
+    if ([NSThread isMainThread]) {
+        bounds = self.bounds;
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            bounds = self.bounds;
+        });
+    }
+    if (bounds.size.width == sizeNew.width &&
+        bounds.size.height == sizeNew.height )
     {
         return NO;
     }
@@ -270,10 +286,7 @@
     
     newSize = sizeNew;
     resizeDone = FALSE;
-    [self performSelectorOnMainThread:@selector(resizeMain) withObject:nil waitUntilDone:YES];
-    while (!resizeDone) {
-        [NSThread sleepForTimeInterval:0.1];
-    }
+    [self resizeMain];
     return YES;
 }
 
